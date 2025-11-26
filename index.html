@@ -1,0 +1,634 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Play, Grid, Trophy, Home, ArrowLeft, RotateCcw, Lock, Star, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Calculator, Activity, MousePointer, Brain, Square } from 'lucide-react';
+
+// --- מנועי המשחק (Game Engines) ---
+
+// 1. מנוע סנייק (Snake Engine)
+const SnakeGame = ({ config, onWin, onLose }) => {
+  const [snake, setSnake] = useState([{ x: 5, y: 5 }]);
+  const [food, setFood] = useState({ x: 10, y: 10 });
+  const [dir, setDir] = useState({ x: 1, y: 0 });
+  const [score, setScore] = useState(0);
+  const gridSize = config.gridSize || 15;
+  const speed = config.speed || 150;
+  
+  // Mobile controls refs
+  const moveRef = useRef(dir);
+  moveRef.current = dir;
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      switch(e.key) {
+        case 'ArrowUp': if(moveRef.current.y === 0) setDir({x:0, y:-1}); break;
+        case 'ArrowDown': if(moveRef.current.y === 0) setDir({x:0, y:1}); break;
+        case 'ArrowLeft': if(moveRef.current.x === 0) setDir({x:-1, y:0}); break;
+        case 'ArrowRight': if(moveRef.current.x === 0) setDir({x:1, y:0}); break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const moveSnake = () => {
+      setSnake(prev => {
+        const newHead = { x: prev[0].x + dir.x, y: prev[0].y + dir.y };
+        
+        // Collision with walls
+        if (newHead.x < 0 || newHead.x >= gridSize || newHead.y < 0 || newHead.y >= gridSize) {
+          onLose(score);
+          return prev;
+        }
+        // Collision with self
+        if (prev.some(s => s.x === newHead.x && s.y === newHead.y)) {
+          onLose(score);
+          return prev;
+        }
+
+        const newSnake = [newHead, ...prev];
+        if (newHead.x === food.x && newHead.y === food.y) {
+          setScore(s => {
+            const newScore = s + 1;
+            if (newScore >= config.targetScore) onWin(newScore);
+            return newScore;
+          });
+          setFood({
+            x: Math.floor(Math.random() * gridSize),
+            y: Math.floor(Math.random() * gridSize)
+          });
+        } else {
+          newSnake.pop();
+        }
+        return newSnake;
+      });
+    };
+    const interval = setInterval(moveSnake, speed);
+    return () => clearInterval(interval);
+  }, [dir, food, gridSize, speed, score, config.targetScore, onWin, onLose]);
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="flex justify-between w-full max-w-xs text-white">
+        <span>יעד: {config.targetScore}</span>
+        <span>ניקוד: {score}</span>
+      </div>
+      <div 
+        className="relative bg-gray-800 border-2 border-gray-600 rounded"
+        style={{ width: 300, height: 300, display: 'grid', gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
+      >
+        {Array.from({ length: gridSize * gridSize }).map((_, i) => {
+          const x = i % gridSize;
+          const y = Math.floor(i / gridSize);
+          const isSnake = snake.some(s => s.x === x && s.y === y);
+          const isFood = food.x === x && food.y === y;
+          return (
+            <div key={i} className={`
+              ${isSnake ? config.color || 'bg-green-500' : ''}
+              ${isFood ? 'bg-red-500 rounded-full scale-75' : ''}
+            `} />
+          );
+        })}
+      </div>
+      {/* Mobile Controls */}
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        <div />
+        <button className="p-4 bg-gray-700 rounded active:bg-gray-600" onClick={() => dir.y === 0 && setDir({x:0, y:-1})}><ChevronUp className="text-white"/></button>
+        <div />
+        <button className="p-4 bg-gray-700 rounded active:bg-gray-600" onClick={() => dir.x === 0 && setDir({x:-1, y:0})}><ChevronLeft className="text-white"/></button>
+        <div />
+        <button className="p-4 bg-gray-700 rounded active:bg-gray-600" onClick={() => dir.x === 0 && setDir({x:1, y:0})}><ChevronRight className="text-white"/></button>
+        <div />
+        <button className="p-4 bg-gray-700 rounded active:bg-gray-600" onClick={() => dir.y === 0 && setDir({x:0, y:1})}><ChevronDown className="text-white"/></button>
+        <div />
+      </div>
+    </div>
+  );
+};
+
+// 2. מנוע קליקר/רפלקס (Clicker Engine)
+const ClickerGame = ({ config, onWin, onLose }) => {
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(config.timeLimit || 10);
+  const [btnPos, setBtnPos] = useState({ top: '50%', left: '50%' });
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      if (score >= config.targetScore) onWin(score);
+      else onLose(score);
+      return;
+    }
+    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft, score, config.targetScore, onWin, onLose]);
+
+  const handleClick = () => {
+    setScore(s => s + 1);
+    if (config.moveButton) {
+      setBtnPos({
+        top: `${10 + Math.random() * 80}%`,
+        left: `${10 + Math.random() * 80}%`
+      });
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center h-[400px] relative w-full bg-gray-900 rounded-xl overflow-hidden border border-gray-700">
+      <div className="absolute top-4 left-4 right-4 flex justify-between text-white text-lg z-10 pointer-events-none">
+        <span>זמן: {timeLeft}</span>
+        <span>יעד: {config.targetScore} | ניקוד: {score}</span>
+      </div>
+      
+      <button 
+        onClick={handleClick}
+        style={{ top: btnPos.top, left: btnPos.left, position: 'absolute', transform: 'translate(-50%, -50%)' }}
+        className={`w-24 h-24 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center font-bold text-xl ${config.color || 'bg-blue-500'} text-white`}
+      >
+        לחץ!
+      </button>
+    </div>
+  );
+};
+
+// 3. מנוע חשבון (Math Engine)
+const MathGame = ({ config, onWin, onLose }) => {
+  const [question, setQuestion] = useState({});
+  const [answer, setAnswer] = useState('');
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(config.timeLimit || 30);
+
+  const generateQuestion = () => {
+    const operators = config.operators || ['+'];
+    const op = operators[Math.floor(Math.random() * operators.length)];
+    const limit = config.numberRange || 10;
+    let a = Math.floor(Math.random() * limit);
+    let b = Math.floor(Math.random() * limit);
+    
+    if (op === '-') { if (a < b) [a, b] = [b, a]; }
+    if (op === '/') { a = b * (Math.floor(Math.random() * 5) + 1); } // Ensure integer result
+
+    setQuestion({ a, b, op });
+    setAnswer('');
+  };
+
+  useEffect(() => {
+    generateQuestion();
+  }, []);
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      if (score >= config.targetScore) onWin(score);
+      else onLose(score);
+      return;
+    }
+    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  const checkAnswer = (e) => {
+    e.preventDefault();
+    let correct;
+    switch(question.op) {
+      case '+': correct = question.a + question.b; break;
+      case '-': correct = question.a - question.b; break;
+      case '*': correct = question.a * question.b; break;
+      case '/': correct = question.a / question.b; break;
+    }
+    
+    if (parseInt(answer) === correct) {
+      const newScore = score + 1;
+      setScore(newScore);
+      if (newScore >= config.targetScore) {
+        onWin(newScore);
+      } else {
+        generateQuestion();
+      }
+    } else {
+      // Penalty or just clear?
+      setAnswer('');
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-6 p-4 text-white">
+      <div className="flex justify-between w-full max-w-xs">
+        <span>זמן: {timeLeft}</span>
+        <span>פתר: {score}/{config.targetScore}</span>
+      </div>
+      
+      <div className="text-5xl font-bold bg-gray-800 p-8 rounded-2xl w-full text-center border border-gray-600">
+        {question.a} {question.op === '*' ? '×' : question.op === '/' ? '÷' : question.op} {question.b}
+      </div>
+
+      <form onSubmit={checkAnswer} className="flex flex-col gap-4 w-full max-w-xs">
+        <input 
+          type="number" 
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          placeholder="?"
+          autoFocus
+          className="p-4 text-center text-2xl text-black rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500"
+        />
+        <button type="submit" className="bg-green-600 p-3 rounded-lg font-bold text-lg hover:bg-green-500">
+          בדוק
+        </button>
+      </form>
+    </div>
+  );
+};
+
+// 4. מנוע זיכרון (Memory Engine)
+const MemoryGame = ({ config, onWin, onLose }) => {
+  const [cards, setCards] = useState([]);
+  const [flipped, setFlipped] = useState([]);
+  const [matched, setMatched] = useState([]);
+  const [moves, setMoves] = useState(0);
+
+  const icons = ['🌟', '🍎', '🚗', '🐶', '⚽', '🍕', '🚀', '🎸'];
+
+  useEffect(() => {
+    const pairCount = config.pairs || 4;
+    const gameIcons = icons.slice(0, pairCount);
+    const deck = [...gameIcons, ...gameIcons]
+      .sort(() => Math.random() - 0.5)
+      .map((icon, id) => ({ id, icon }));
+    setCards(deck);
+  }, []);
+
+  const handleCardClick = (id) => {
+    if (flipped.length === 2 || flipped.includes(id) || matched.includes(id)) return;
+    
+    const newFlipped = [...flipped, id];
+    setFlipped(newFlipped);
+    
+    if (newFlipped.length === 2) {
+      setMoves(m => m + 1);
+      const card1 = cards.find(c => c.id === newFlipped[0]);
+      const card2 = cards.find(c => c.id === newFlipped[1]);
+      
+      if (card1.icon === card2.icon) {
+        setMatched(prev => {
+          const newMatched = [...prev, ...newFlipped];
+          if (newMatched.length === cards.length) {
+            setTimeout(() => onWin(cards.length), 500);
+          }
+          return newMatched;
+        });
+        setFlipped([]);
+      } else {
+        setTimeout(() => setFlipped([]), 1000);
+      }
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <div className="text-white">מהלכים: {moves} | מצא את כל הזוגות</div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${config.cols || 4}, 1fr)` }}>
+        {cards.map(card => {
+          const isFlipped = flipped.includes(card.id) || matched.includes(card.id);
+          return (
+            <button
+              key={card.id}
+              onClick={() => handleCardClick(card.id)}
+              className={`w-16 h-16 sm:w-20 sm:h-20 text-3xl flex items-center justify-center rounded-xl transition-all duration-300 transform ${
+                isFlipped ? 'bg-white rotate-0' : 'bg-blue-600 rotate-180 text-transparent'
+              }`}
+            >
+              {isFlipped ? card.icon : '?'}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  );
+};
+
+// 5. מנוע תגובה מהירה (Grid Reflex)
+const ReflexGame = ({ config, onWin, onLose }) => {
+  const [activeCell, setActiveCell] = useState(null);
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(config.timeLimit || 15);
+  const gridSize = 9; // 3x3
+
+  useEffect(() => {
+    const spawn = () => setActiveCell(Math.floor(Math.random() * gridSize));
+    spawn();
+    const interval = setInterval(spawn, config.speed || 800);
+    return () => clearInterval(interval);
+  }, [config.speed]);
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      if (score >= config.targetScore) onWin(score);
+      else onLose(score);
+      return;
+    }
+    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  const handlePress = (index) => {
+    if (index === activeCell) {
+      setScore(s => s + 1);
+      setActiveCell(Math.floor(Math.random() * gridSize)); // Move immediately
+    } else {
+      setScore(s => Math.max(0, s - 1));
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+       <div className="flex justify-between w-full max-w-xs text-white">
+        <span>זמן: {timeLeft}</span>
+        <span>ניקוד: {score}/{config.targetScore}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-3 bg-gray-800 p-4 rounded-xl">
+        {Array.from({ length: gridSize }).map((_, i) => (
+          <button
+            key={i}
+            onMouseDown={() => handlePress(i)}
+            onTouchStart={(e) => { e.preventDefault(); handlePress(i); }}
+            className={`w-20 h-20 rounded-lg transition-colors duration-75 ${
+              activeCell === i 
+                ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)] scale-105' 
+                : 'bg-gray-700'
+            }`}
+          />
+        ))}
+      </div>
+      <div className="text-gray-400 text-sm">לחץ על האדום מהר ככל האפשר!</div>
+    </div>
+  );
+};
+
+// --- מחולל המשחקים (Game Generator) ---
+
+const generateGames = () => {
+  const games = [];
+  const types = ['snake', 'clicker', 'math', 'memory', 'reflex'];
+  const colors = ['bg-green-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500'];
+  
+  for (let i = 1; i <= 200; i++) {
+    const type = types[i % 5];
+    const difficultyMult = 1 + (i / 50); // מתחזק ככל שעולים במספר
+    let config = {};
+    let name = '';
+    let description = '';
+    let icon = null;
+
+    if (type === 'snake') {
+      name = `נחש ארסי ${Math.ceil(i/5)}`;
+      description = 'אסוף נקודות בלי להתנגש';
+      config = { 
+        targetScore: 5 + Math.floor(i / 10), 
+        speed: Math.max(50, 200 - (i * 2)), 
+        color: colors[i % colors.length],
+        gridSize: 10 + (i % 10)
+      };
+      icon = <Activity className="w-6 h-6" />;
+    } else if (type === 'clicker') {
+      name = `אצבע מהירה ${Math.ceil(i/5)}`;
+      description = 'לחץ על הכפתור לפני שנגמר הזמן';
+      config = { 
+        targetScore: 10 + i, 
+        timeLimit: 10, 
+        moveButton: i > 20,
+        color: colors[i % colors.length]
+      };
+      icon = <MousePointer className="w-6 h-6" />;
+    } else if (type === 'math') {
+      name = `אתגר מספרים ${Math.ceil(i/5)}`;
+      description = 'פתור תרגילים לפני שנגמר הזמן';
+      config = { 
+        targetScore: 3 + Math.floor(i / 20),
+        timeLimit: 30,
+        numberRange: 10 + i,
+        operators: i < 50 ? ['+'] : i < 100 ? ['+', '-'] : ['+', '-', '*']
+      };
+      icon = <Calculator className="w-6 h-6" />;
+    } else if (type === 'memory') {
+      name = `מוח זיכרון ${Math.ceil(i/5)}`;
+      description = 'מצא את כל הזוגות';
+      const pairs = Math.min(8, 2 + Math.floor(i / 30));
+      config = { 
+        pairs: pairs,
+        cols: pairs >= 6 ? 4 : 3
+      };
+      icon = <Brain className="w-6 h-6" />;
+    } else if (type === 'reflex') {
+      name = `רשת לייזר ${Math.ceil(i/5)}`;
+      description = 'תפוס את הריבוע האדום';
+      config = {
+        targetScore: 5 + Math.floor(i / 10),
+        timeLimit: 15,
+        speed: Math.max(300, 1000 - (i * 4))
+      };
+      icon = <Grid className="w-6 h-6" />;
+    }
+
+    games.push({
+      id: i,
+      type,
+      name,
+      description,
+      config,
+      icon,
+      cost: i === 1 ? 0 : Math.floor(i * 5) // Cost to unlock if not sequential
+    });
+  }
+  return games;
+};
+
+const GAMES_DB = generateGames();
+
+// --- הרכיב הראשי (App Component) ---
+
+const App = () => {
+  const [activeGameId, setActiveGameId] = useState(null);
+  const [unlockedGames, setUnlockedGames] = useState([1]);
+  const [coins, setCoins] = useState(0);
+  const [notification, setNotification] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  // Load progress
+  useEffect(() => {
+    const saved = localStorage.getItem('arcade_save');
+    if (saved) {
+      const data = JSON.parse(saved);
+      setUnlockedGames(data.unlocked || [1]);
+      setCoins(data.coins || 0);
+    }
+  }, []);
+
+  // Save progress
+  useEffect(() => {
+    localStorage.setItem('arcade_save', JSON.stringify({ unlocked: unlockedGames, coins }));
+  }, [unlockedGames, coins]);
+
+  const handleWin = (score) => {
+    const reward = Math.floor(score * 10);
+    setCoins(c => c + reward);
+    
+    // Unlock next game
+    if (!unlockedGames.includes(activeGameId + 1) && activeGameId < 200) {
+      setUnlockedGames(prev => [...prev, activeGameId + 1]);
+      showNotification(`משחק ${activeGameId + 1} נפתח! +${reward} מטבעות`);
+    } else {
+      showNotification(`ניצחון! +${reward} מטבעות`);
+    }
+    
+    setTimeout(() => setActiveGameId(null), 2000);
+  };
+
+  const handleLose = (score) => {
+    const reward = Math.floor(score * 2);
+    setCoins(c => c + reward);
+    showNotification(`הפסדת. השגת ${reward} מטבעות`);
+    setTimeout(() => setActiveGameId(null), 2000);
+  };
+
+  const showNotification = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const activeGameData = GAMES_DB.find(g => g.id === activeGameId);
+
+  const filteredGames = useMemo(() => {
+    if (filter === 'all') return GAMES_DB;
+    return GAMES_DB.filter(g => g.type === filter);
+  }, [filter]);
+
+  // Render Game Screen
+  if (activeGameId) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-2xl bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+          <div className="bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
+            <button 
+              onClick={() => setActiveGameId(null)}
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft size={20} />
+              חזרה לארקייד
+            </button>
+            <h2 className="text-xl font-bold text-blue-400">{activeGameData.name}</h2>
+            <div className="w-8" />
+          </div>
+          
+          <div className="p-8 min-h-[500px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+            {activeGameData.type === 'snake' && <SnakeGame config={activeGameData.config} onWin={handleWin} onLose={handleLose} />}
+            {activeGameData.type === 'clicker' && <ClickerGame config={activeGameData.config} onWin={handleWin} onLose={handleLose} />}
+            {activeGameData.type === 'math' && <MathGame config={activeGameData.config} onWin={handleWin} onLose={handleLose} />}
+            {activeGameData.type === 'memory' && <MemoryGame config={activeGameData.config} onWin={handleWin} onLose={handleLose} />}
+            {activeGameData.type === 'reflex' && <ReflexGame config={activeGameData.config} onWin={handleWin} onLose={handleLose} />}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Menu Screen
+  return (
+    <div className="min-h-screen bg-gray-950 text-white font-sans" dir="rtl">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-gray-900/90 backdrop-blur-md border-b border-gray-800 p-4 shadow-lg">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Grid className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                ARCADE 200
+              </h1>
+              <p className="text-xs text-gray-400">מערכת משחקים אינסופית</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-gray-800 px-4 py-2 rounded-full border border-gray-700">
+            <Trophy className="text-yellow-500 w-5 h-5" />
+            <span className="font-bold text-yellow-400">{coins.toLocaleString()}</span>
+          </div>
+        </div>
+        
+        {/* Filters */}
+        <div className="max-w-6xl mx-auto mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <button onClick={() => setFilter('all')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'all' ? 'bg-white text-black font-bold' : 'bg-gray-800 text-gray-400'}`}>הכל</button>
+          <button onClick={() => setFilter('snake')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'snake' ? 'bg-green-500 text-white font-bold' : 'bg-gray-800 text-gray-400'}`}>סנייק</button>
+          <button onClick={() => setFilter('math')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'math' ? 'bg-blue-500 text-white font-bold' : 'bg-gray-800 text-gray-400'}`}>חשבון</button>
+          <button onClick={() => setFilter('reflex')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'reflex' ? 'bg-red-500 text-white font-bold' : 'bg-gray-800 text-gray-400'}`}>רפלקס</button>
+          <button onClick={() => setFilter('memory')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'memory' ? 'bg-purple-500 text-white font-bold' : 'bg-gray-800 text-gray-400'}`}>זיכרון</button>
+          <button onClick={() => setFilter('clicker')} className={`px-4 py-1 rounded-full text-sm whitespace-nowrap transition-colors ${filter === 'clicker' ? 'bg-orange-500 text-white font-bold' : 'bg-gray-800 text-gray-400'}`}>זריזות</button>
+        </div>
+      </header>
+
+      {/* Grid */}
+      <main className="max-w-6xl mx-auto p-4 pb-20">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-300">
+            {filter === 'all' ? 'כל המשחקים' : `משחקי ${filter}`} 
+            <span className="text-sm font-normal mr-2 text-gray-500">({filteredGames.length})</span>
+          </h2>
+          <div className="text-sm text-gray-500">התקדמות: {unlockedGames.length}/200</div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {filteredGames.map((game) => {
+            const isUnlocked = unlockedGames.includes(game.id);
+            return (
+              <div 
+                key={game.id}
+                onClick={() => isUnlocked && setActiveGameId(game.id)}
+                className={`
+                  relative aspect-square rounded-2xl p-4 flex flex-col justify-between transition-all duration-300
+                  ${isUnlocked 
+                    ? 'bg-gray-800 hover:bg-gray-700 hover:scale-105 cursor-pointer border border-gray-700 hover:border-blue-500 shadow-lg' 
+                    : 'bg-gray-900 border border-gray-800 opacity-60 cursor-not-allowed'}
+                `}
+              >
+                <div className="flex justify-between items-start">
+                  <span className={`p-2 rounded-lg ${isUnlocked ? 'bg-gray-700' : 'bg-gray-800'}`}>
+                    {game.icon}
+                  </span>
+                  <span className="text-xs font-mono text-gray-500">#{game.id}</span>
+                </div>
+                
+                <div>
+                  <h3 className={`font-bold leading-tight mb-1 ${isUnlocked ? 'text-white' : 'text-gray-500'}`}>
+                    {game.name}
+                  </h3>
+                  {isUnlocked ? (
+                    <p className="text-[10px] text-gray-400 line-clamp-2">{game.description}</p>
+                  ) : (
+                    <div className="flex items-center gap-1 text-yellow-500 text-xs">
+                      <Lock size={12} />
+                      <span>נעול</span>
+                    </div>
+                  )}
+                </div>
+
+                {!isUnlocked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-2xl">
+                    <Lock className="text-white/20 w-10 h-10" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </main>
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl z-50 animate-bounce flex items-center gap-2">
+          <Star className="w-5 h-5 fill-current" />
+          <span className="font-bold">{notification}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
+
